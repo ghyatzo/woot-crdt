@@ -57,8 +57,26 @@ struct Op {
     inline bool operator==(const Op& other) const {return type == other.type && op == other.op;}
 };
 
-struct WBegin : WChar {};
-struct WEnd : WChar {};
+struct WBegin : WChar {
+    WBegin() : WChar {
+        CharID{std::numeric_limits<size_t>::min(), std::numeric_limits<size_t>::min()},
+        '\0',
+        false,
+        CharID{},
+        CharID{}
+    } {}
+};
+struct WEnd : WChar {
+    WEnd() : WChar {
+        CharID{std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max()},
+        '\0',
+        false,
+        CharID{},
+        CharID{}
+    } {}
+};
+
+
 
 // define the orders here!
 inline bool operator<(const WBegin a, const CharID b)      {return true;}
@@ -101,7 +119,7 @@ public:
     
     void            insert(WChar c, size_t pos);
     std::vector<WChar> subseq(WChar c, WChar d);
-    WChar&          ith_visible(size_t i);
+    std::optional<WChar> ith_visible(size_t i);
     
     std::string     value();
 private:
@@ -123,7 +141,7 @@ public:
         // I elected to just go with a id of 0.
         size_t pos {1};
         for (const auto c : str) {
-            WChar wc {CharID{0, ++clock_}, c, true, std::prev(buffer_.end(),2)->id , buffer_.end()->id};
+            WChar wc {CharID{0, ++clock_}, c, true, std::prev(buffer_.end(),2)->id , std::prev(buffer_.end(),1)->id};
                 buffer_.insert(wc, pos++);
             }
     }

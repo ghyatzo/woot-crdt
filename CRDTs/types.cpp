@@ -11,6 +11,7 @@
 #include <vector>
 #include <ranges>
 #include <algorithm>
+#include <limits>
 
 #include "types.hpp"
 
@@ -60,16 +61,18 @@ std::vector<WChar> WString::subseq(WChar c, WChar d)
     return {vb, ve};
 }
 
-WChar& WString::ith_visible(size_t i)
+std::optional<WChar> WString::ith_visible(size_t i)
 {
-    assert(i < content_.size() && i <= num_visible_);
+//    assert(i < content_.size() && i <= num_visible_);
+    assert(i < content_.size());
     auto it = content_.begin();
     for (size_t j {}; it < content_.end(); ++it) {
         if (it->visible) {
             if (++j == i) return *it;
         }
     }
-    throw std::runtime_error("no visible characters");
+    // no visible characters, return the ith invisible (?, may be stupid)
+    return {};
 }
 
 std::string WString::value() {
@@ -119,8 +122,11 @@ void WOOTBuffer::integrate_del(WChar c)
 Op WOOTBuffer::generate_ins(size_t pos, char a)
 {
     ++clock_;
-    auto cp = buffer_.ith_visible(pos);
-    auto cn = buffer_.ith_visible(pos + 1);
+    auto cpopt = buffer_.ith_visible(pos);
+    auto cnopt = buffer_.ith_visible(pos + 1);
+    
+    auto cp = cpopt.has_value() ? cpopt.value() : WBegin();
+    auto cn = cnopt.has_value() ? cnopt.value() : WEnd();
     auto c = WChar{ site_char_id(), a, true, cp.id, cn.id };
     integrate_ins(c, cp, cn);
     
@@ -132,9 +138,10 @@ Op WOOTBuffer::generate_ins(size_t pos, char a)
 Op WOOTBuffer::generate_del(size_t pos)
 {
     auto c = buffer_.ith_visible(pos);
-    integrate_del(c);
+    assert(c.has_value());
+    integrate_del(c.value());
     
-    std::variant<DelOp, InsOp> op = DelOp{c};
+    std::variant<DelOp, InsOp> op = DelOp{c.value()};
     return {op, OpType::DEL};
 }
 
@@ -144,6 +151,7 @@ void WOOTBuffer::try_apply()
     // for new operations and goes on until pool_ is empty.
     
     // this is ugly as fuck, probably smarted to use a deque or something.
+    // erase-remove breaks if we loop through it while doing it (duh)
     std::vector<Op> remove_these {};
     for (auto& op : pool_) {
         if (!is_exacutable(op)) continue;

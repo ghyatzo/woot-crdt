@@ -12,6 +12,23 @@
 int main(int argc, const char * argv[]) {
     
     
+    std::cout << "test empty buffer insertion" << std::endl;
+    WOOTBuffer site0 {99, ""};
+    auto op99 = site0.generate_ins(0, 'a');
+    std::cout << site0.value() << std::endl;
+    
+    std::cout << "test single buffer insertion" << std::endl;
+    WOOTBuffer site00 {999, "a"};
+    auto op999 = site00.generate_ins(1, 'b');
+    std::cout << site00.value() << std::endl;
+    
+    std::cout << "test insertion in buffer with all deleted chars" << std::endl;
+    WOOTBuffer site88 {88, "a"};
+    auto op88 = site88.generate_del(1);
+    auto op882 = site88.generate_ins(0, 'b');
+    std::cout << site88.value() << std::endl;
+    
+    
 
     std::cout << "(del, ins) commuting: " << std::endl;
     // (del, ins) commutation
