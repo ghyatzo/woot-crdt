@@ -15,6 +15,7 @@
 #include <variant>
 #include <string>
 #include <utility>
+#include <deque>
 using namespace std::rel_ops;
 
 enum OpType {
@@ -99,25 +100,40 @@ class WString {
 public:
     WString();
     inline WChar& operator[](int i) { return content_[i]; }
-//    inline bool lt(WChar a, WChar b) { return pos(a) < pos(b); }   // <_S
-//    inline bool lte(WChar a, WChar b) { return pos(a) <= pos(b); } // <=_S
-//
-    inline bool lt(CharID& a, CharID& b)  { return pos(a) < pos(b); }   // <_S
-    inline bool lte(CharID& a, CharID& b) { return pos(a) <= pos(b); } // <=_S
+
+//    inline bool lt(CharID& a, CharID& b)  { return pos(a) < pos(b); }   // <_S
+    inline bool lte(CharID& a, CharID& b) {
+        return pos(a).value() <= pos(b).value();
+    } // <=_S
     
     inline size_t   size()              { return content_.size(); }
+    inline size_t   visibles()          { return num_visible_; }
     inline auto     end()               { return content_.end(); }
     inline auto     pos_it(CharID c)    {
-        for (auto it = content_.begin(); it <content_.end(); ++it) {
+        for (auto it = content_.begin(); it < content_.end(); ++it) {
             if (it->id == c) return it;
         }
         return content_.end();
     }
-    inline bool     contains(CharID c)  { return pos_it(c) != std::end(content_); }
-    inline size_t   pos(CharID c)       { return pos_it(c) - content_.begin(); }
-    inline void     del(WChar c)        { pos_it(c.id)->visible = false; --num_visible_; }
+    inline bool contains(CharID c) { return pos(c).has_value(); }
+    inline std::optional<size_t> pos(CharID c) {
+        auto wc = pos_it(c);
+        if (wc == content_.end()) return {};
+        else return wc - content_.begin();
+    }
     
-    void            insert(WChar c, size_t pos);
+    inline std::optional<WChar> del(WChar c) {
+        auto wc = pos_it(c.id);
+        if (wc == content_.end()) return {};
+        
+        if (wc->visible) {
+            wc->visible = false;
+            --num_visible_;
+        }
+        return *wc;
+    }
+    
+    std::optional<WChar> insert(WChar c, size_t pos);
     std::vector<WChar> subseq(WChar c, WChar d);
     std::optional<WChar> ith_visible(size_t i);
     
@@ -129,7 +145,6 @@ private:
 
 class WOOTBuffer {
 public:
-    
     WOOTBuffer(const size_t id) 
     : id_{id}, clock_{}, pool_{}, buffer_{} { };
     WOOTBuffer(const size_t id, const std::string &str)
@@ -147,13 +162,23 @@ public:
     }
     
     inline CharID site_char_id() { return {id_, clock_}; }
-    inline void add_op(Op op) { pool_.push_back(op); }
+
+    inline void merge(Op op) {
+        pool_.push_front(op);
+        try_apply();
+    }
+    inline void merge(std::optional<Op> optop) {
+        if (optop.has_value()) pool_.push_front(optop.value());
+        try_apply();
+    }
     
-    bool is_exacutable(Op);
-    void integrate_ins(WChar c, WChar cp, WChar cn);
-    void integrate_del(WChar c);
-    Op generate_ins(size_t pos, char a);
-    Op generate_del(size_t pos);
+    //bool is_exacutable(Op); // deprecated
+    std::optional<WChar> integrate_ins(WChar c, WChar cp, WChar cn);
+    inline std::optional<WChar> integrate_del(WChar c) {
+        return buffer_.del(c);
+    }
+    std::optional<Op> ins(size_t pos, char a);
+    std::optional<Op> del(size_t pos);
     
     void try_apply();
     inline std::string value() { return buffer_.value(); }
@@ -161,7 +186,7 @@ public:
 private:
     size_t id_;
     size_t clock_;
-    std::vector<Op> pool_;
+    std::deque<Op> pool_;
     WString buffer_;
 };
 

@@ -8,27 +8,135 @@
 #include <iostream>
 #include "types.hpp"
 
+bool insert_char_from_empty_string() {
+    std::cout << "insert char from empty string" << std::endl;
+    WOOTBuffer site0 {99, ""};
+    [[maybe_unused]] auto op0 = site0.ins(0, 'a');
+    std::cout << site0.value() << std::endl;
+    return site0.value() == "a";
+}
+
+bool insert_out_of_bounds_fails() {
+    std::cout << "insert out of bounds fails" << std::endl;
+    WOOTBuffer site0 {99, "a"};
+    auto op0 = site0.ins(2, 'a');
+    std::cout << site0.value() << std::endl;
+    return !op0.has_value();
+}
+
+bool delete_out_of_bounds_fails() {
+    std::cout << "delete out of bounds fails" << std::endl;
+    WOOTBuffer site0 {99, "a"};
+    auto op0 = site0.del(2);
+    std::cout << site0.value() << std::endl;
+    return !op0.has_value();
+}
+
+bool delete_char_in_string() {
+    std::cout << "delete char in string" << std::endl;
+    WOOTBuffer site0 {99, "a"};
+    [[maybe_unused]] auto op0 = site0.del(0);
+    std::cout << site0.value() << std::endl;
+    return site0.value() == "";
+}
+bool insert_after_deleting() {
+    std::cout << "insert after deleting" << std::endl;
+    WOOTBuffer site0 {99, "ab"};
+    [[maybe_unused]] auto op0 = site0.del(0);
+    [[maybe_unused]] auto op1 = site0.ins(0, 'c');
+    std::cout << site0.value() << std::endl;
+    return site0.value() == "cb";
+}
+bool integrating_remote_work() {
+    std::cout << "integrating remote work" << std::endl;
+    WOOTBuffer site0 {99, "a"};
+    WOOTBuffer site1 {88, "a"};
+    auto op0 = site0.ins(1, 'b');
+    site1.merge(op0);
+    std::cout << site0.value() << " " << site1.value() << std::endl;
+    return site0.value() == site1.value();
+}
+bool inserting_in_buffer_with_all_invisible_chars() {
+    std::cout << "insertion in buffer with all deleted chars" << std::endl;
+    WOOTBuffer site0 {99, "a"};
+    [[maybe_unused]] auto op0 = site0.del(0);
+    [[maybe_unused]] auto op1 = site0.ins(0, 'b');
+    std::cout << site0.value() << std::endl;
+    return site0.value() == "b";
+}
+
+bool multiple_insertions_converge() {
+    std::cout << "multiple_insertion_converge" << std::endl;
+    WOOTBuffer site0 {99, ""};
+    WOOTBuffer site1 {88, ""};
+    auto op0 = site0.ins(0, 'a');
+    site1.merge(op0);
+    auto op1 = site0.ins(1, 'b');
+    auto op2 = site1.ins(1, 'c');
+    site0.merge(op2);
+    site1.merge(op1);
+    
+    std::cout << site0.value() << " " << site1.value() << std::endl;
+    return site0.value() == "acb" && site0.value() == site1.value();
+}
+
+bool deleting_while_inserting_converges() {
+    std::cout << "deleting while inserting converges" << std::endl;
+    WOOTBuffer site1 {99, ""};
+    WOOTBuffer site2 {88, ""};
+    auto op1 = site1.ins(0, 'a');
+    site2.merge(op1);
+    auto op2 = site1.ins(1, 'b');
+    site2.merge(op2);
+    auto op3 = site1.ins(2, 'c');
+    
+    auto del = site2.del(1);
+    site2.merge(op3);
+    site1.merge(del);
+    
+    std::cout << site1.value() << " " << site2.value() << std::endl;
+    return site1.value() == "ac" && site1.value() == site2.value();
+}
+
+bool receiving_many_operations_brings_in_sync() {
+    std::cout << "deleting while inserting converges" << std::endl;
+    WOOTBuffer site1 {99, ""};
+    WOOTBuffer site2 {88, ""};
+    auto ops = std::vector<std::optional<Op>> {
+        site1.ins(0, 'a'),
+        site1.ins(1, 'b'),
+        site1.ins(2, 'c'),
+        site1.ins(3, ' '),
+        site1.ins(4, 'd'),
+        site1.del(3),
+        site1.ins(3, 'c'),
+        site1.ins(0, ' '),
+    };
+    for (const auto& op : ops) {
+        site2.merge(op);
+    }
+    
+    std::cout << site1.value() << " " << site2.value() << std::endl;
+    return site1.value() == " abccd" && site1.value() == site2.value();
+}
+
+//bool incompatible_work_converges_as_soon_as_it_is_integrable() {
+//    
+//}
 
 int main(int argc, const char * argv[]) {
     
-    
-    std::cout << "test empty buffer insertion" << std::endl;
-    WOOTBuffer site0 {99, ""};
-    auto op99 = site0.generate_ins(0, 'a');
-    std::cout << site0.value() << std::endl;
-    
-    std::cout << "test single buffer insertion" << std::endl;
-    WOOTBuffer site00 {999, "a"};
-    auto op999 = site00.generate_ins(1, 'b');
-    std::cout << site00.value() << std::endl;
-    
-    std::cout << "test insertion in buffer with all deleted chars" << std::endl;
-    WOOTBuffer site88 {88, "a"};
-    auto op88 = site88.generate_del(1);
-    auto op882 = site88.generate_ins(0, 'b');
-    std::cout << site88.value() << std::endl;
-    
-    
+    std::cout<< insert_char_from_empty_string() << std::endl;
+    std::cout<< insert_out_of_bounds_fails() << std::endl;
+    std::cout<< delete_out_of_bounds_fails() << std::endl;
+    std::cout<< delete_char_in_string() << std::endl;
+    std::cout<< insert_after_deleting() << std::endl;
+    std::cout<< integrating_remote_work() << std::endl;
+    std::cout<< inserting_in_buffer_with_all_invisible_chars() << std::endl;
+    std::cout<< multiple_insertions_converge() << std::endl;
+    std::cout<< deleting_while_inserting_converges() << std::endl;
+    std::cout<< receiving_many_operations_brings_in_sync() << std::endl;
+
 
     std::cout << "(del, ins) commuting: " << std::endl;
     // (del, ins) commutation
@@ -46,14 +154,12 @@ int main(int argc, const char * argv[]) {
     WOOTBuffer site2 {2, "abc"};
     std::string site1_timeline {site1.value()};
     std::string site2_timeline {site2.value()};
-    auto op1 = site1.generate_ins(2, '1');
-    auto op2 = site2.generate_del(3);
+    auto op1 = site1.ins(2, '1');
+    auto op2 = site2.del(3);
     site1_timeline += "\t\t"+site1.value();
     site2_timeline += "\t\t"+site2.value();
-    site1.add_op(op2);
-    site2.add_op(op1);
-    site1.try_apply();
-    site2.try_apply();
+    site1.merge(op2);
+    site2.merge(op1);
     site1_timeline += "\t\t"+site1.value();
     site2_timeline += "\t\t"+site2.value();
     
@@ -78,14 +184,12 @@ int main(int argc, const char * argv[]) {
     WOOTBuffer site4 {4, "abc"};
     std::string site3_timeline {site3.value()};
     std::string site4_timeline {site4.value()};
-    auto op3 = site3.generate_del(2);
-    auto op4 = site4.generate_del(3);
+    auto op3 = site3.del(2);
+    auto op4 = site4.del(3);
     site3_timeline += "\t\t"+site3.value();
     site4_timeline += "\t\t"+site4.value();
-    site3.add_op(op4);
-    site4.add_op(op3);
-    site3.try_apply();
-    site4.try_apply();
+    site3.merge(op4);
+    site4.merge(op3);
     site3_timeline += "\t\t"+site3.value();
     site4_timeline += "\t\t"+site4.value();
     
@@ -120,34 +224,28 @@ int main(int argc, const char * argv[]) {
     std::string site6_timeline {site6.value()};
     std::string site7_timeline {site7.value()};
     
-    auto op5 = site5.generate_ins(1, '1');
+    auto op5_1 = site5.ins(1, '1');
     site5_timeline += "\t\t"+site5.value();
-    auto op7 = site5.generate_ins(1, '3');
+    auto op5_2 = site5.ins(1, '3');
     site5_timeline += "\t\t"+site5.value();
 
-    auto op6 = site6.generate_ins(1, '2');
+    auto op6_1 = site6.ins(1, '2');
     site6_timeline += "\t\t"+site6.value();
-    
     site7_timeline += "\t\t"+site7.value();
     
-    site5.add_op(op6);
-    
-    site6.add_op(op7);
-    site6.add_op(op5);
-    
-    site7.add_op(op5);
-    site7.add_op(op6);
-    site7.add_op(op7);
-    
-    site5.try_apply(); // 1 operation to apply
+    site5.merge(op6_1); // 1 operation to apply
     site5_timeline += "\t\t"+site5.value();
-
-    site6.try_apply(); // 2 operations to apply, only one is executable immediately
+    
+    // 2 operations to apply, only one is executable immediately
+    site6.merge(op5_2); //this merge won't happen: we need op5_1 first
     site6_timeline += "\t\t"+site6.value();
-    site6.try_apply(); // we try to apply the one we couldn't before.
+    site6.merge(op5_1); //adding this operation automatically merges the new op and all the operations that depends on it.
     site6_timeline += "\t\t"+site6.value();
-
-    site7.try_apply(); // 3 operations applied immediately
+    
+    // 3 operations applied immediately
+    site7.merge(op5_1);
+    site7.merge(op6_1);
+    site7.merge(op5_2);
     site7_timeline += "\t\t"+site7.value();
 
     std::cout << site5_timeline << std::endl; // ab     a1b     a31b    a312b

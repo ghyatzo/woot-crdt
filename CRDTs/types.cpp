@@ -44,11 +44,12 @@ WString::WString()
     content_.push_back(ce);
 }
 
-void WString::insert(WChar c, size_t pos)
+std::optional<WChar> WString::insert(WChar c, size_t pos)
 {
     assert(pos < content_.size());
     content_.insert(std::next(content_.begin(), pos), c);
     if (c.visible) ++num_visible_;
+    return c;
 }
 
 std::vector<WChar> WString::subseq(WChar c, WChar d)
@@ -64,14 +65,13 @@ std::vector<WChar> WString::subseq(WChar c, WChar d)
 std::optional<WChar> WString::ith_visible(size_t i)
 {
 //    assert(i < content_.size() && i <= num_visible_);
-    assert(i < content_.size());
     auto it = content_.begin();
     for (size_t j {}; it < content_.end(); ++it) {
         if (it->visible) {
             if (++j == i) return *it;
         }
     }
-    // no visible characters, return the ith invisible (?, may be stupid)
+
     return {};
 }
 
@@ -83,23 +83,28 @@ std::string WString::value() {
     return ss.str();
 }
 
-bool WOOTBuffer::is_exacutable(Op op)
-{
-    if (op.type == DEL) return buffer_.contains(std::get<DelOp>(op.op).c.id);
-    if (op.type == INS) {
-        auto insop = std::get<InsOp>(op.op);
-        return buffer_.contains(insop.cn.id) && buffer_.contains(insop.cp.id);
-    }
-    return false;
-}
+//bool WOOTBuffer::is_exacutable(Op op)
+//{
+//    if (op.type == DEL) return buffer_.contains(std::get<DelOp>(op.op).c.id);
+//    if (op.type == INS) {
+//        auto insop = std::get<InsOp>(op.op);
+//        return buffer_.contains(insop.cn.id) && buffer_.contains(insop.cp.id);
+//    }
+//    return false;
+//} DEPRECATED
 
-void WOOTBuffer::integrate_ins(WChar c, WChar cp, WChar cn)
+std::optional<WChar> WOOTBuffer::integrate_ins(WChar c, WChar cp, WChar cn)
 {
     auto Sp = buffer_.subseq(cp, cn);
-    if (Sp.empty()) buffer_.insert(c, buffer_.pos(cn.id));
-    else {
-
-        auto L_filter = [&](WChar d){ return buffer_.lte(d.prev, cp.id) && buffer_.lte(cn.id, d.next); };
+    if (Sp.empty()) {
+        auto pos = buffer_.pos(cn.id);
+        if (pos.has_value()) return buffer_.insert(c, pos.value());
+        else return {};
+    } else {
+        if (not buffer_.contains(cp.id) || not buffer_.contains(cn.id)) return {};
+        auto L_filter = [&](WChar d){
+            return buffer_.lte(d.prev, cp.id) && buffer_.lte(cn.id, d.next);
+        };
         std::vector<WChar> L;
         std::copy_if(Sp.begin(), Sp.end(), std::back_inserter(L), L_filter);
         
@@ -112,15 +117,14 @@ void WOOTBuffer::integrate_ins(WChar c, WChar cp, WChar cn)
         while( (i < L.size()-1) && (li->id < c.id) ) {
             ++i; ++li;
         }
-        integrate_ins(c, L[i-1], L[i]);
+        return integrate_ins(c, L[i-1], L[i]);
     }
 }
-void WOOTBuffer::integrate_del(WChar c)
+
+std::optional<Op> WOOTBuffer::ins(size_t pos, char a)
 {
-    buffer_.del(c);
-}
-Op WOOTBuffer::generate_ins(size_t pos, char a)
-{
+    if (pos > buffer_.visibles()) return std::nullopt;
+    
     ++clock_;
     auto cpopt = buffer_.ith_visible(pos);
     auto cnopt = buffer_.ith_visible(pos + 1);
@@ -132,17 +136,19 @@ Op WOOTBuffer::generate_ins(size_t pos, char a)
     
     std::variant<DelOp, InsOp> op = InsOp{c, cp, cn};
     
-    return {op, OpType::INS};
+    return Op{op, OpType::INS};
 }
 
-Op WOOTBuffer::generate_del(size_t pos)
+std::optional<Op> WOOTBuffer::del(size_t pos)
 {
-    auto c = buffer_.ith_visible(pos);
+    if (pos >= buffer_.visibles()) return std::nullopt;
+    
+    auto c = buffer_.ith_visible(pos+1);
     assert(c.has_value());
     integrate_del(c.value());
     
     std::variant<DelOp, InsOp> op = DelOp{c.value()};
-    return {op, OpType::DEL};
+    return Op{op, OpType::DEL};
 }
 
 void WOOTBuffer::try_apply()
@@ -154,15 +160,14 @@ void WOOTBuffer::try_apply()
     // erase-remove breaks if we loop through it while doing it (duh)
     std::vector<Op> remove_these {};
     for (auto& op : pool_) {
-        if (!is_exacutable(op)) continue;
-        remove_these.push_back(op);
-        
         if (op.type == DEL) {
             auto op_cont = std::get<DelOp>(op.op);
-            integrate_del(op_cont.c);
+            if (integrate_del(op_cont.c).has_value())
+                remove_these.push_back(op);
         } else {
             auto op_cont = std::get<InsOp>(op.op);
-            integrate_ins(op_cont.c, op_cont.cp, op_cont.cn);
+            if (integrate_ins(op_cont.c, op_cont.cp, op_cont.cn).has_value())
+                remove_these.push_back(op);
         }
     }
     for (const auto& op: remove_these) {
