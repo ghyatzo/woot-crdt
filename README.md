@@ -1,76 +1,72 @@
 ## WOOT framework
-Provo a fare un piccolo riassunto sul funzionamento e il data model.
+The idea is to have a framework that respects the following three properties (called consistency model):
+- (1) Convergence: applying the same set of operations to each site results in the same buffer between them all
+- (2) Intention Preservation: for each operation, applying it at each site is the same as applying it at the starting site
+    (i.e. : if I have `"ab"` on one side and I add `1` between `'a'` and `'b'`, I want the operation applied on another buffer
+    respect the fact that `1` is between `'a'` and `'b`', that is the intention).
+- (3) Casuality Preservation: given any pair of operations `Oa`, `Ob`, if they are randomly related
+    `Oa -> Ob`, then it must be that `Oa` is executed before `Ob`.
+    (i.e. in our very simple case the relation `Oa -> Ob`, is a "temporal" one, I will explain later what is meant by "time")
 
-L'idea é avere un framework che rispetti le tre seguenti proprieta (detto consistency model):
-(1) Convergence: applicare lo stesso set di operazioni ad ogni sito, comporta ottenere lo stesso buffer tra tutti
-(2) Intention Preservation: per ogni operazione, applicarla in ogni sito é lo stesso che applicarla nel luogo di partenza
-    (i.e. : se ho "ab" da una parte e aggiungo 1 tra "a" e "b", voglio che l'operazione applicata su un altro buffer
-    rispetti il fatto che 1 é tra "a" e "b", quella é l'intenzione.)
-(3) Casuality Preservation: data qualunque coppia di operazioni Oa, Ob, se sono casualmente relazionate
-    Oa -> Ob, allora deve essere che Oa viene eseguita prima di Ob.
-    (i.e. nel nostro caso molto semplice la relazione Oa -> Ob, é una "temporale", spiego dopo cosa si intende con "tempo")
+The framework is structured around two basic operations:
+- `ins(a < c < b)` insert the character `c` between the character `a` and the character `b`
+- `del(c)` deletes the character `c`. (deletion is special, see below)
 
-Il framework é strutturato attorno a due operazioni fondamentali:
-- `ins(a < c < b)` inserisci il carattere `c` tra il carattere `a` e il carattere `b`
-- `del(c)` elimina il carattere `c`. (l'eliminazione é particolare, vedi sotto)
+These operations differ from the usual position-based operations `ins(p, c)` and `del(p)` where we specify
+the position of the buffer in which to insert or remove a character.
+This causes problems, as we have seen, because we have to make sure the buffer does not change during these operations.
 
-queste operazioni differiscono dalle solite operazioni basate sulla posizione `ins(p, c)` e `del(p)` dove specifichiamo
-la posizione del buffer in cui inserire o rimuovere un carattere.
-Grande causa di problemi, come abbiamo visto, perche dobbiamo assicurarci che il buffer non cambi durante queste operazioni.
+The problem with operations like `ins(a < c < b)` is that specifying "between `a` and `b`" offers only partial ordering
+(i.e. I can't tell if something comes before the other for each pair of elements. There will be some pairs for which I cannot say anything).
+To overcome this problem, the framework uses special characters with a kind of unique id. Thanks to which we can, starting
+from the partial order indicated by 'intentions' we can instead reconstruct a linear order equal for all.
 
-il problema di operazioni tipo `ins(a < c < b)` é che specificare "tra `a` e `b`" offre solamente un ordine parziale
-(i.e. non posso stabilire se qualcosa viene prima dell'altro per ogni coppia di elementi. Ci saranno alcune coppie per le quali non posso dire nulla)
-Per sopperire a questo problema il framework utilizza dei caratteri speciali, dotati di una sorta di id univoco. Grazie al quale possiamo, partendo
-dall'ordine parziale indicato dalle "intenzioni" possiamo ricostruire invece un ordine lineare uguale per tutti.
+Here the first (perhaps) pain point:
+The framework does not act on standard buffers, but acts on a more complex representation of them
+(in our case we should keep a mirror of the real buffer and switch between them).
+Each element of the buffer is called a `W-Character` and is a tuple of 5 elements:
+`<id, char, v, cp, cn>` where:
+-`id` is the unique id of our W-character
+-`char` is the actual alphanumeric character (the one we may see in the actual buffer)
+-`v` is the visibility flag (see below for tombstone/del discourse)
+-`cp` is the unique id of the previous W-character of our intention (the `'a'` in `a < c < b`)
+-`cn` is the unique id of the next W-character of our intention (the `'b'` in `a < c < b`) 
 
-Qui il primo (forse) pain point:
-Il framework non agisce su buffer standard, ma agisce su una rappresentazione piu complessa dello stesso
-(nel nostro caso dovremmo tenere un mirror del buffer reale e passare dall'uno all'altro)
-Ogni elemento del buffer é detto un `W-Character` ed é una tupla di 5 elementi:
-`<id, char, v, cp, cn>` dove:
--`id` é l'id univoco del nostro W-character
--`char` é il carattere alphanumerico vero e proprio (quello che forse vedremo nel buffer reale)
--`v` é la visibility flag (vedi sotto per discorso tombstone/del)
--`cp` é l'id univoco del W-character precedente della nostra intention (la "a" in a < c < b)
--`cn` é l'id univoco del W-character successivo della nostra intention (la "b" in a < c < b) 
+###### What is a character id?
+A character id is a tuple `<ns, ng>` which depends on the "time" and site where the character was generated.
+Each site (or client) will have a unique representative id, and that will be `ns`. 
+(It is important to stress that we need to be able to make comparisons between these ids.)
 
-piccolo detour ora sul discorso sul tempo e sull'id: Cosa é l'id di un character?
-l'id di un character é una tupla `<ns, ng>` che dipende dal tempo e dal sito in cui il character é stato generato.
-Ogni sito (o client) avra' un id univoce rappresentativo, e quello sara' `ns` 
-###### IMPORTANTE
-dobbiamo essere in grado di fare comparison tra questi id!
-possono essere random, e ho notato che viene comodo se il server ha l'id piu basso (0?)
-per questioni moleste che posso spiegare a voce.
+Second: __time__, `ng` represents the time that character was generated, and is nothing more than a counter that is incremented every time we add a character 
+to the buffer.
+This ensures that the characters are truly unique.
 
-Secondo: il tempo, `ng` rappresenta il tempo in cui é stato generato quel carattere, e altro non é che un contatore che viene incrementato ogni volta che aggiungiamo un carattere 
-al buffer.
-questo assicura che i caratteri sono davvero univoci.
+###### Pain point number two (maybe):
+The issue of `delete` and the tombstone approach. As you may have guessed, in this model you don't really delete, you "hide".
+In fact, applying the delete operation is nothing more than flipping the `v` flag of the desired character.
+Thus, after a session the WOOT buffer will contain all the characters ever typed in that session.
 
-##### pain point numero dos (forse):
-la questione del delete e dell'approccio tombstone. come avete forse intuito, in questo modello non si cancella davvero, ma si "nasconde".
-infatti applicare l'operazione di delete altro non é che flippare la flag `v` del carattere desiderato.
-Quindi, dopo una sessione di lavoro il WOOT buffer conterra tutti i caratteri mai digitati in quella sessione.
+In my opinion, this is not too problematic since we are not talking about millions of characters, and in any case it is always possible to do some garbage collection on the buffer
+once in a while. (This is a problem in a purely peer 2 peer context, but we have a central server that can act as manager).
 
-Secondo me non é troppo problematico dato che non stiamo parlando di milioni di caratteri, ed in ogni caso é sempre possibile fare del "garbage collection" sul buffer
-una volta ogni tanto. (é un problma in contesto puramente peer 2 peer, ma noi abbiamo un central server che puo fare da manager)
+###### How it works:
+That said, the operation is very simple:
+- one site generates an operation, applies it to its own buffer and then broadcasts it.
+- other sites receive the operation and store it in a pool.
+- the sites can then iterate within this pool and apply all the operations, and this is very important, __THAT ARE APPLICABLE__.
+  
+What do i mean by "are applicable"? 
+Suppose you have your buffer `"ab"`, I perform two operations `ins(a < 1 < b)` and `ins(a < 3 < 1)` one after the other resulting in `"a31b"`.
+These two operations are sent to another client, but he receives them in the opposite order:
+since his buffer is still `"ab"` the operation `ins(a < 3 < 1)` makes no sense, since `1` does not yet exist.
+No problem, we skip it and wait until we get an operation that adds that `1` (the base assumption is that we receive all operations *eventually*).
+At which point we can try the first operation again, and this time it works and gets placed in the right place.
+This is the main mechanism behind the idea of **Eventual Consistency**.
 
-Detto cio, in funzionamento é molto semplice:
-- un sito genera un operazione, la applica al suo stesso buffer e poi la broadcasta.
-- gli altri siti ricevono l'operazione e la storano in un pool.
-- con tutta la calma del mondo possono poi iterare dentro questo pool e applicare tutte le operazioni, e questo é molto importante, CHE SONO APPLICABILI.
-cosa intendo con "sono applicabili"? supponi di avere il tuo buffer "ab"
-performo due operazioni `ins(a < 1 < b)` e `ins(a < 3 < 1)` una dopo l'altra ottenendo "a31b".
-queste due operazioni vengono mandate ad un altro client, ma lui le riceve al contrario:
-dato che il suo buffer é ancora "ab" l'operazione `ins(a < 3 < 1)` non ha senso, dato che 1 non esiste ancora.
-nessun problema, si skippa e si aspetta fino a che non si ottiene un operazione che aggiunge quell'uno (e di sicuro ad un certo punto arriva)
-a quel punto posso riprovare ad applicare la prima operazione e sta volta funziona e viene piazzato al posto giusto.
+The cool part is the promise that if I get all the operations generated by others, no matter what order or how long in between,
+I will always be able to rebuild the buffer as intended. The operations are completely independent of the state of the buffer when they arrive.
 
-La figata quale é? la promessa che se mi arrivano tutte le operazioni generate dagli altri, non importa in che ordine o con quanto tempo in mezzo
-io saro sempre in grado di ricostruire il buffer come inteso. Le operazioni sono completamente indipendenti dallo stato del buffer quando arrivano.
-
-## Codice
-scusate per il cpp e se é mezzo incasinato, lo ho spalmato assieme durante un allnighter e alla fine stavo perdendo gli occhi e il cervello.
-se volete provare a giocarci dovrete scaricare il sorgente e compilarlo con il vostro buildtool preferito,
-é un progetto molto semplice con solo un file `main.cpp` dove faccio dei test e un file `types.cpp` + header dove implemento il framework grossolanamente.
-nel file `main.cpp` ho fatto anche dei diagrammini che spiegano quello che sta succedendo e che mostrano la commutativita tra le varie combinazioni di operazioni.
+## Code
+It's a very simple project with just a `main.cpp` file where I do some testing and a `types.cpp` + header file where I roughly implement the framework as a Proof of Concept.
+In the `main.cpp` file I have also made little diagrams explaining what is going on and showing the commutativity between various combinations of operations.
 
